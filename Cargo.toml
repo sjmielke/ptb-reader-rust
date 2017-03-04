@@ -1,0 +1,7 @@
+[package]
+name = "ptb-reader"
+version = "0.1.0"
+authors = ["Sebastian J. Mielke <sjm@sjmielke.com>"]
+
+[dependencies]
+pest = "0.4"

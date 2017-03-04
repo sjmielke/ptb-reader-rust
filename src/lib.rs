@@ -42,8 +42,7 @@ mod myparser {
     
     impl_rdp! {
         grammar! {
-            wholefile  =  { myws* ~ singletree+ ~ eof }
-            eof        =  { eoi }
+            wholefile  =  { myws* ~ singletree+ }
             singletree =  { ["("] ~ myws* ~ node ~ myws* ~ endmarker ~ myws* }
             node       = _{ headed | terminal }
             headed     =  { ["("] ~ nt ~ (!closing ~ myws+ ~ node)+ ~ myws* ~ endmarker }
@@ -56,24 +55,19 @@ mod myparser {
         }
         
         process! {
-            _wholefile(&self) -> Vec<PTBTree> {
+            get_all_trees(&self) -> Vec<PTBTree> {
                 (_: wholefile, mut ts: _gatherfile()) => {
                     ts.reverse();
                     ts
                 }
             }
             _gatherfile(&self) -> Vec<PTBTree> {
-                (_: eof) => { Vec::new() },
-                (t: _singletree(), mut trees: _gatherfile()) => {
-                    trees.push(t);
+                (_: singletree, t: _consume_until_endmarker(), mut trees: _gatherfile()) => {
+                    assert!(t.len() == 1);
+                    trees.push(t[0].clone());
                     trees
                 },
-            }
-            _singletree(&self) -> PTBTree {
-                (_: singletree, nodes: _consume_until_endmarker()) => {
-                    assert!(nodes.len() == 1);
-                    nodes[0].clone()
-                },
+                () => { Vec::new() },
             }
             _consume_until_endmarker(&self) -> Vec<PTBTree> {
                 (_: headed, &head: nt, mut innernodes: _consume_until_endmarker(), mut follow: _consume_until_endmarker()) => {
@@ -96,33 +90,28 @@ mod myparser {
 }
 
 pub fn parse_ptbtree(s: &str) -> PTBTree {
-    // println!("\n\nNow parsing: {}", s);
-    
-    let mut parser = myparser::Rdp::new(StringInput::new(s)); //reset?
-    
-    assert!(parser.singletree());
-    assert!(parser.end());
-    
-    // println!("");
-    // for tok in parser.queue() {
-    //     println!("{:>10} {}", format!("{:?}", tok.rule), &s[tok.start..tok.end])
-    // }
-    
-    parser._singletree()
+    let parsed = parse_ptbtrees(s);
+    if parsed.len() != 1 {
+        panic!("Not exactly one tree found!")
+    } else {
+        parsed[0].clone()
+    }
 }
 
-pub fn parse_ptb_file(f: &str) -> Vec<PTBTree> {
-    //println!("\n\nNow parsing file: {}", f);
-    
-    let mut contents = String::new();
-    File::open(f).unwrap().read_to_string(&mut contents).unwrap();
-    
-    let mut parser = myparser::Rdp::new(StringInput::new(&contents));
+pub fn parse_ptbtrees(s: &str) -> Vec<PTBTree> {
+    let mut parser = myparser::Rdp::new(StringInput::new(s));
     
     assert!(parser.wholefile());
     assert!(parser.end());
     
-    parser._wholefile()
+    parser.get_all_trees()
+}
+
+pub fn parse_ptb_file(f: &str) -> Vec<PTBTree> {
+    let mut contents = String::new();
+    File::open(f).unwrap().read_to_string(&mut contents).unwrap();
+    
+    parse_ptbtrees(&contents)
 }
 
 pub fn parse_ptb_sample_dir(mergeddir: &str) -> Vec<PTBTree> {

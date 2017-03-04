@@ -2,6 +2,9 @@
 extern crate pest;
 use pest::prelude::*;
 
+use std::fs::File;
+use std::io::prelude::*;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PTBTree {
     InnerNode {
@@ -33,28 +36,45 @@ impl std::fmt::Display for PTBTree {
     }
 }
 
-pub fn parse_ptbtree(s: &str) -> PTBTree {
-    // println!("\n\nNow parsing: {}", s);
+mod myparser {
+    use super::PTBTree;
+    use pest::prelude::*;
     
     impl_rdp! {
         grammar! {
-            root      =  { ["("] ~ node ~ endmarker }
-            node      = _{ headed | terminal }
-            headed    =  { ["("] ~ nt ~ ([" "] ~ node)+ ~ endmarker }
-            endmarker =  { [")"] }
-            terminal  =  { basechar+ | [")"] | ["("] }
-            nt        =  { basechar+ }
-            basechar  = _{ ['0'..'9'] | ['a'..'z'] | ['A'..'Z'] | ["-"] | ["_"] | [","] | ["."] }
+            wholefile  =  { myws* ~ singletree+ ~ eof }
+            eof        =  { eoi }
+            singletree =  { ["("] ~ myws* ~ node ~ myws* ~ endmarker ~ myws* }
+            node       = _{ headed | terminal }
+            headed     =  { ["("] ~ nt ~ (!closing ~ myws+ ~ node)+ ~ myws* ~ endmarker }
+            closing    = _{ myws* ~ endmarker }
+            endmarker  =  { [")"] }
+            terminal   =  { basechar+ }
+            nt         =  { basechar+ }
+            basechar   = _{ !([" "] | ["("] | [")"]) ~ any }
+            myws       = _{ [" "] | ["\n"] | ["\r"] }
         }
         
         process! {
-            gather(&self) -> PTBTree {
-                (_: root, nodes: _consume_until_endmarker()) => {
-                    assert!(nodes.len() == 1);
-                    nodes[0].clone()
+            _wholefile(&self) -> Vec<PTBTree> {
+                (_: wholefile, mut ts: _gatherfile()) => {
+                    ts.reverse();
+                    ts
                 }
             }
-            
+            _gatherfile(&self) -> Vec<PTBTree> {
+                (_: eof) => { Vec::new() },
+                (t: _singletree(), mut trees: _gatherfile()) => {
+                    trees.push(t);
+                    trees
+                },
+            }
+            _singletree(&self) -> PTBTree {
+                (_: singletree, nodes: _consume_until_endmarker()) => {
+                    assert!(nodes.len() == 1);
+                    nodes[0].clone()
+                },
+            }
             _consume_until_endmarker(&self) -> Vec<PTBTree> {
                 (_: headed, &head: nt, mut innernodes: _consume_until_endmarker(), mut follow: _consume_until_endmarker()) => {
                     innernodes.reverse();
@@ -73,10 +93,14 @@ pub fn parse_ptbtree(s: &str) -> PTBTree {
             }
         }
     }
+}
+
+pub fn parse_ptbtree(s: &str) -> PTBTree {
+    // println!("\n\nNow parsing: {}", s);
     
-    let mut parser = Rdp::new(StringInput::new(s)); //reset?
+    let mut parser = myparser::Rdp::new(StringInput::new(s)); //reset?
     
-    assert!(parser.root());
+    assert!(parser.singletree());
     assert!(parser.end());
     
     // println!("");
@@ -84,7 +108,30 @@ pub fn parse_ptbtree(s: &str) -> PTBTree {
     //     println!("{:>10} {}", format!("{:?}", tok.rule), &s[tok.start..tok.end])
     // }
     
-    parser.gather()
+    parser._singletree()
+}
+
+pub fn parse_ptb_file(f: &str) -> Vec<PTBTree> {
+    //println!("\n\nNow parsing file: {}", f);
+    
+    let mut contents = String::new();
+    File::open(f).unwrap().read_to_string(&mut contents).unwrap();
+    
+    let mut parser = myparser::Rdp::new(StringInput::new(&contents));
+    
+    assert!(parser.wholefile());
+    assert!(parser.end());
+    
+    parser._wholefile()
+}
+
+pub fn parse_ptb_sample_dir(mergeddir: &str) -> Vec<PTBTree> {
+    let mut result = Vec::new();
+    for num in 1..200 {
+        let filename = mergeddir.to_string() + &format!("wsj_{:04}.mrg", num);
+        result.extend(parse_ptb_file(&filename))
+    }
+    result
 }
 
 #[cfg(test)]
@@ -92,21 +139,23 @@ mod tests {
     use super::*;
     
     fn sample_trees(level: usize) -> Vec<PTBTree> {
+        let mut result;
         if level == 0 {
-            vec![
-                PTBTree::TerminalNode { label: "0".to_string() },
-                PTBTree::TerminalNode { label: "a".to_string() },
-                PTBTree::TerminalNode { label: ")".to_string() },
-                PTBTree::TerminalNode { label: "_".to_string() },
-                PTBTree::TerminalNode { label: "(".to_string() },
-            ]
+            result = Vec::new();
+        } else if level == 1 {
+            result = sample_trees(level - 1);
+            result.push(PTBTree::TerminalNode { label: "012".to_string() });
+            result.push(PTBTree::TerminalNode { label: "abc".to_string() });
+            result.push(PTBTree::TerminalNode { label: "-LRB-".to_string() });
+            result.push(PTBTree::TerminalNode { label: "_".to_string() });
+            result.push(PTBTree::TerminalNode { label: "-RRB-".to_string() });
         } else {
-            vec![
-                PTBTree::InnerNode { label: "A".to_string(), children: sample_trees(level - 1) },
-                PTBTree::InnerNode { label: "B".to_string(), children: sample_trees(level - 1) },
-                PTBTree::InnerNode { label: "C".to_string(), children: sample_trees(level - 1) },
-            ]
+            result = sample_trees(level - 1);
+            result.push(PTBTree::InnerNode { label: "ABC".to_string(), children: sample_trees(level - 1) });
+            result.push(PTBTree::InnerNode { label: "B".to_string(), children: sample_trees(level - 1) });
+            result.push(PTBTree::InnerNode { label: "CBA".to_string(), children: sample_trees(level - 1) });
         }
+        result
     }
     
     #[test]
@@ -135,8 +184,18 @@ mod tests {
     
     #[test]
     fn test_parser() {
-        for t in sample_trees(3) {
-            assert!(parse_ptbtree(&format!("({})", t)) == t.clone());
+        let puretree = parse_ptbtree("((ROOT (A x) (C 1)))\n");
+        assert_eq!(puretree, parse_ptbtree("((ROOT (A   x)  (C  1)))\n"));
+        assert_eq!(puretree, parse_ptbtree("((ROOT (A    x)  (C  1) ))\n"));
+        assert_eq!(puretree, parse_ptbtree("((ROOT (A    x) \n (C \n 1) ))\n"));
+        
+        for t in sample_trees(4) {
+            assert!(parse_ptbtree(&format!("({})\n", t)) == t.clone());
         }
+    }
+    
+    #[test]
+    fn parse_actual_ptb_sample() {
+        assert_eq!(3914, parse_ptb_sample_dir("/home/sjm/documents/Uni/penn-treebank-sample/treebank/combined/").len())
     }
 }

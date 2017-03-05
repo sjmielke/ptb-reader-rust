@@ -36,6 +36,17 @@ impl std::fmt::Display for PTBTree {
     }
 }
 
+impl std::convert::From<PTBTree> for String {
+    fn from(t: PTBTree) -> String {
+        match t {
+            PTBTree::TerminalNode { label } => label.clone(),
+            PTBTree::InnerNode { label: _, children } => {
+                children.iter().map(|c| c.clone().into()).collect::<Vec<String>>().join(" ")
+            }
+        }
+    }
+}
+
 mod myparser {
     use super::PTBTree;
     use pest::prelude::*;
@@ -127,6 +138,26 @@ pub fn parse_ptb_sample_dir(mergeddir: &str) -> Vec<PTBTree> {
 mod tests {
     use super::*;
     
+    fn sample_tree() -> PTBTree {
+        PTBTree::InnerNode{ label: "ROOT".to_string(), children: vec![
+            PTBTree::InnerNode{ label: "A".to_string(), children: vec![
+                PTBTree::TerminalNode{ label: "2".to_string() }
+            ] },
+            PTBTree::InnerNode{ label: "X".to_string(), children: vec![
+                PTBTree::InnerNode{ label: "B".to_string(), children: vec![
+                    PTBTree::TerminalNode{ label: "1".to_string() }
+                ] },
+                PTBTree::InnerNode{ label: "C".to_string(), children: vec![
+                    PTBTree::TerminalNode{ label: "1".to_string() }
+                ] },
+                PTBTree::TerminalNode{ label: "2".to_string() },
+                PTBTree::InnerNode{ label: "D".to_string(), children: vec![
+                    PTBTree::TerminalNode{ label: "1".to_string() }
+                ] }
+            ] }
+        ] }
+    }
+    
     fn sample_trees(level: usize) -> Vec<PTBTree> {
         let mut result;
         if level == 0 {
@@ -148,27 +179,15 @@ mod tests {
     }
     
     #[test]
+    fn yield_of_ptb_tree() {
+        let s: String = sample_tree().into();
+        assert_eq!(s, "2 1 1 2 1")
+    }
+    
+    #[test]
     fn test_ptbtree_display() {
-        let tree =
-            PTBTree::InnerNode{ label: "ROOT".to_string(), children: vec![
-                PTBTree::InnerNode{ label: "A".to_string(), children: vec![
-                    PTBTree::TerminalNode{ label: "2".to_string() }
-                ] },
-                PTBTree::InnerNode{ label: "X".to_string(), children: vec![
-                    PTBTree::InnerNode{ label: "B".to_string(), children: vec![
-                        PTBTree::TerminalNode{ label: "1".to_string() }
-                    ] },
-                    PTBTree::InnerNode{ label: "C".to_string(), children: vec![
-                        PTBTree::TerminalNode{ label: "1".to_string() }
-                    ] },
-                    PTBTree::TerminalNode{ label: "2".to_string() },
-                    PTBTree::InnerNode{ label: "D".to_string(), children: vec![
-                        PTBTree::TerminalNode{ label: "1".to_string() }
-                    ] }
-                ] }
-            ] };
         let s = "((ROOT (A 2) (X (B 1) (C 1) 2 (D 1))))";
-        assert!(format!("({})", tree) == s);
+        assert_eq!(format!("({})", sample_tree()), s)
     }
     
     #[test]

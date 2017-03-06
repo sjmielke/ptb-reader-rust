@@ -118,56 +118,68 @@ mod myparser {
 
 /// Parse a single tree.
 ///
-/// Wrapper around `parse_ptbtrees`, `panic`ing if string contains not exactly one tree.
+/// Wrapper around `parse_ptbtrees`, returns `None` if string contains not exactly one tree.
 /// 
 /// ```rust
 /// use ptb_reader::*;
 /// let tree = PTBTree::InnerNode{ label: "NT".to_string(), children: vec![PTBTree::TerminalNode{ label: "t".to_string() }] };
-/// assert_eq!(tree, parse_ptbtree("((NT t))"))
+/// assert_eq!(tree, parse_ptbtree("((NT t))").unwrap())
 /// ```
-pub fn parse_ptbtree(s: &str) -> PTBTree {
-    let parsed = parse_ptbtrees(s);
+pub fn parse_ptbtree(s: &str) -> Option<PTBTree> {
+    let parsed = match parse_ptbtrees(s) {
+        None => return None,
+        Some(p) => p
+    };
     if parsed.len() != 1 {
-        panic!("Not exactly one tree found!")
+        None
     } else {
-        parsed[0].clone()
+        Some(parsed[0].clone())
     }
 }
 
 /// Parse a string of multiple trees.
 /// 
+/// Returns `None` if string contains anything unparseable.
+/// 
 /// ```rust
 /// use ptb_reader::*;
 /// let tree = PTBTree::InnerNode{ label: "NT".to_string(), children: vec![PTBTree::TerminalNode{ label: "t".to_string() }] };
-/// assert_eq!(tree, parse_ptbtree("((NT t))"))
+/// assert_eq!(vec![tree.clone(), tree], parse_ptbtrees("((NT t)) ((NT t))").unwrap())
 /// ```
-pub fn parse_ptbtrees(s: &str) -> Vec<PTBTree> {
+pub fn parse_ptbtrees(s: &str) -> Option<Vec<PTBTree>> {
     let mut parser = myparser::Rdp::new(StringInput::new(s));
     
-    assert!(parser.wholefile());
-    assert!(parser.end());
-    
-    parser.get_all_trees()
+    if !parser.wholefile() || !parser.end() {
+        None
+    } else {
+        Some(parser.get_all_trees())
+    }
 }
 
 /// Parse a PTB file.
 /// 
 /// Wrapper for reading in a file and feeding it to `parse_ptbtrees`.
-pub fn parse_ptb_file(f: &str) -> Vec<PTBTree> {
+pub fn parse_ptb_file(f: &str) -> Option<Vec<PTBTree>> {
     let mut contents = String::new();
-    File::open(f).unwrap().read_to_string(&mut contents).unwrap();
-    
-    parse_ptbtrees(&contents)
+    match File::open(f) {
+        Err(_) => None,
+        Ok(mut fh) => match fh.read_to_string(&mut contents) {
+            Err(_) => None,
+            Ok(_) => parse_ptbtrees(&contents)
+        }
+    }
 }
 
 /// Parse the free PTB sample files (`wsj_0001.mrg` to `wsj_0199.mrg`).
+/// 
+/// Will `panic` if anything goes wrong.
 /// 
 /// Wrapper around parse_ptb_file.
 pub fn parse_ptb_sample_dir(mergeddir: &str) -> Vec<PTBTree> {
     let mut result = Vec::new();
     for num in 1..200 {
         let filename = mergeddir.to_string() + &format!("wsj_{:04}.mrg", num);
-        result.extend(parse_ptb_file(&filename))
+        result.extend(parse_ptb_file(&filename).unwrap())
     }
     result
 }
@@ -230,13 +242,13 @@ mod tests {
     
     #[test]
     fn test_parser() {
-        let puretree = parse_ptbtree("((ROOT (A x) (C 1)))\n");
-        assert_eq!(puretree, parse_ptbtree("((ROOT (A   x)  (C  1)))\n"));
-        assert_eq!(puretree, parse_ptbtree("((ROOT (A    x)  (C  1) ))\n"));
-        assert_eq!(puretree, parse_ptbtree("((ROOT (A    x) \n (C \n 1) ))\n"));
+        let puretree = parse_ptbtree("((ROOT (A x) (C 1)))\n").unwrap();
+        assert_eq!(puretree, parse_ptbtree("((ROOT (A   x)  (C  1)))\n").unwrap());
+        assert_eq!(puretree, parse_ptbtree("((ROOT (A    x)  (C  1) ))\n").unwrap());
+        assert_eq!(puretree, parse_ptbtree("((ROOT (A    x) \n (C \n 1) ))\n").unwrap());
         
         for t in sample_trees(4) {
-            assert!(parse_ptbtree(&format!("({})\n", t)) == t.clone());
+            assert!(parse_ptbtree(&format!("({})\n", t)).unwrap() == t.clone());
         }
     }
     

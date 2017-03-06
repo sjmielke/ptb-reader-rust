@@ -5,6 +5,7 @@ use pest::prelude::*;
 use std::fs::File;
 use std::io::prelude::*;
 
+/// Arbitrarily wide recursive trees of `String`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PTBTree {
     InnerNode {
@@ -17,6 +18,13 @@ pub enum PTBTree {
 }
 
 impl std::fmt::Display for PTBTree {
+    /// Return bracketed PTB-like notation:
+    ///
+    /// ```rust
+    /// use ptb_reader::PTBTree;
+    /// let tree = PTBTree::InnerNode{ label: "NT".to_string(), children: vec![PTBTree::TerminalNode{ label: "t".to_string() }] };
+    /// assert_eq!(format!("{}", tree), "(NT t)")
+    /// ```
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             &PTBTree::InnerNode { ref label, ref children } => {
@@ -37,6 +45,13 @@ impl std::fmt::Display for PTBTree {
 }
 
 impl std::convert::From<PTBTree> for String {
+    /// Conversion into String of terminals at the leaves (i.e, *front*, *yield*).
+    ///
+    /// ```rust
+    /// use ptb_reader::PTBTree;
+    /// let tree = PTBTree::InnerNode{ label: "NT".to_string(), children: vec![PTBTree::TerminalNode{ label: "t".to_string() }] };
+    /// assert_eq!(String::from(tree), "t")
+    /// ```
     fn from(t: PTBTree) -> String {
         match t {
             PTBTree::TerminalNode { label } => label.clone(),
@@ -47,6 +62,7 @@ impl std::convert::From<PTBTree> for String {
     }
 }
 
+/// Internal PTB parser, using pest
 mod myparser {
     use super::PTBTree;
     use pest::prelude::*;
@@ -100,6 +116,15 @@ mod myparser {
     }
 }
 
+/// Parse a single tree.
+///
+/// Wrapper around `parse_ptbtrees`, `panic`ing if string contains not exactly one tree.
+/// 
+/// ```rust
+/// use ptb_reader::*;
+/// let tree = PTBTree::InnerNode{ label: "NT".to_string(), children: vec![PTBTree::TerminalNode{ label: "t".to_string() }] };
+/// assert_eq!(tree, parse_ptbtree("((NT t))"))
+/// ```
 pub fn parse_ptbtree(s: &str) -> PTBTree {
     let parsed = parse_ptbtrees(s);
     if parsed.len() != 1 {
@@ -109,6 +134,13 @@ pub fn parse_ptbtree(s: &str) -> PTBTree {
     }
 }
 
+/// Parse a string of multiple trees.
+/// 
+/// ```rust
+/// use ptb_reader::*;
+/// let tree = PTBTree::InnerNode{ label: "NT".to_string(), children: vec![PTBTree::TerminalNode{ label: "t".to_string() }] };
+/// assert_eq!(tree, parse_ptbtree("((NT t))"))
+/// ```
 pub fn parse_ptbtrees(s: &str) -> Vec<PTBTree> {
     let mut parser = myparser::Rdp::new(StringInput::new(s));
     
@@ -118,6 +150,9 @@ pub fn parse_ptbtrees(s: &str) -> Vec<PTBTree> {
     parser.get_all_trees()
 }
 
+/// Parse a PTB file.
+/// 
+/// Wrapper for reading in a file and feeding it to `parse_ptbtrees`.
 pub fn parse_ptb_file(f: &str) -> Vec<PTBTree> {
     let mut contents = String::new();
     File::open(f).unwrap().read_to_string(&mut contents).unwrap();
@@ -125,6 +160,9 @@ pub fn parse_ptb_file(f: &str) -> Vec<PTBTree> {
     parse_ptbtrees(&contents)
 }
 
+/// Parse the free PTB sample files (`wsj_0001.mrg` to `wsj_0199.mrg`).
+/// 
+/// Wrapper around parse_ptb_file.
 pub fn parse_ptb_sample_dir(mergeddir: &str) -> Vec<PTBTree> {
     let mut result = Vec::new();
     for num in 1..200 {
@@ -203,6 +241,7 @@ mod tests {
     }
     
     #[test]
+    #[ignore]
     fn parse_actual_ptb_sample() {
         assert_eq!(3914, parse_ptb_sample_dir("/home/sjm/documents/Uni/penn-treebank-sample/treebank/combined/").len())
     }

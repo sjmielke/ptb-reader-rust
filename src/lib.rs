@@ -17,30 +17,28 @@ pub enum PTBTree {
     }
 }
 
+/// Return bracketed (but not outside-bracketed!) PTB notation:
+fn print_bracketed_ptbtree(t: &PTBTree) -> String {
+    match t {
+        &PTBTree::InnerNode { ref label, ref children } => {
+            format!("({} {})", label, children.iter().map(|c| print_bracketed_ptbtree(c)).collect::<Vec<_>>().join(" "))
+        }
+        &PTBTree::TerminalNode { ref label } => {
+            label.to_string()
+        }
+    }
+}
+
 impl std::fmt::Display for PTBTree {
-    /// Return bracketed PTB-like notation:
+    /// Return bracketed (and outside-bracketed!) PTB notation:
     ///
     /// ```rust
     /// use ptb_reader::PTBTree;
     /// let tree = PTBTree::InnerNode{ label: "NT".to_string(), children: vec![PTBTree::TerminalNode{ label: "t".to_string() }] };
-    /// assert_eq!(format!("{}", tree), "(NT t)")
+    /// assert_eq!(format!("{}", tree), "((NT t))")
     /// ```
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            &PTBTree::InnerNode { ref label, ref children } => {
-                try!(write!(f, "({} ", label));
-                for (i, c) in children.iter().enumerate() {
-                    try!(write!(f, "{}", c));
-                    if i < children.len() - 1 {
-                        try!(write!(f, " "));
-                    }
-                }
-                write!(f, ")")
-            }
-            &PTBTree::TerminalNode { ref label } => {
-                write!(f, "{}", label)
-            }
-        }
+        write!(f, "({})", print_bracketed_ptbtree(self))
     }
 }
 
@@ -237,7 +235,7 @@ mod tests {
     #[test]
     fn test_ptbtree_display() {
         let s = "((ROOT (A 2) (X (B 1) (C 1) 2 (D 1))))";
-        assert_eq!(format!("({})", sample_tree()), s)
+        assert_eq!(format!("{}", sample_tree()), s)
     }
     
     #[test]
@@ -248,7 +246,7 @@ mod tests {
         assert_eq!(puretree, parse_ptbtree("((ROOT (A    x) \n (C \n 1) ))\n").unwrap());
         
         for t in sample_trees(4) {
-            assert!(parse_ptbtree(&format!("({})\n", t)).unwrap() == t.clone());
+            assert!(parse_ptbtree(&format!("{}\n", t)).unwrap() == t.clone());
         }
     }
     
@@ -256,5 +254,28 @@ mod tests {
     #[ignore]
     fn parse_actual_ptb_sample() {
         assert_eq!(3914, parse_ptb_sample_dir("/home/sjm/documents/Uni/penn-treebank-sample/treebank/combined/").len())
+    }
+    
+    #[test]
+    fn readme_example() {
+        let s: &str = "((S (NNP John) (VP (VBD saw) (NNP Mary))))";
+        let t: PTBTree = 
+            PTBTree::InnerNode{ label: "S".to_string(), children: vec![
+                PTBTree::InnerNode{ label: "NNP".to_string(), children: vec![
+                    PTBTree::TerminalNode{ label: "John".to_string() }
+                ] },
+                PTBTree::InnerNode{ label: "VP".to_string(), children: vec![
+                    PTBTree::InnerNode{ label: "VBD".to_string(), children: vec![
+                        PTBTree::TerminalNode{ label: "saw".to_string() }
+                    ] },
+                    PTBTree::InnerNode{ label: "NNP".to_string(), children: vec![
+                        PTBTree::TerminalNode{ label: "Mary".to_string() }
+                    ] }
+                ] }
+            ] }
+        ;
+        assert_eq!(parse_ptbtree(s).unwrap(), t);
+        assert_eq!(format!("{}", t), s);
+        assert_eq!(String::from(t), "John saw Mary");
     }
 }

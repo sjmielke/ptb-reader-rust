@@ -1,7 +1,14 @@
 [package]
 name = "ptb-reader"
 version = "0.1.0"
-authors = ["Sebastian J. Mielke <sjm@sjmielke.com>"]
+authors = ["Sebastian J. Mielke <githubcontact@sjmielke.com>"]
+repository = "https://github.com/sjmielke/ptb-reader-rust"
+homepage = "https://github.com/sjmielke/ptb-reader-rust"
+license = "BSD-3-Clause"
+readme = "README.md"
+description = "Simple parsing of the merged Penn Treebank format."
+keywords = ["PTB", "treebank", "parsing", "NLP", "corpus"]
+categories = ["parsing", "science", "text-processing"]
 
 [dependencies]
 pest = "0.4"

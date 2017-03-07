@@ -44,10 +44,20 @@ impl PTBTree {
         String::from(self)
     }
     
+    /// Return number of terminal words, i.e. length of front.
+    pub fn front_length(&self) -> usize {
+        match self {
+            &PTBTree::TerminalNode { label: _ } => 1,
+            &PTBTree::InnerNode { label: _, ref children } => {
+                children.iter().map(|c| c.front_length()).sum()
+            }
+        }
+    }
+    
+    /// Remove predicate-argument annotations and trace elements.
+    /// See <http://dx.doi.org/10.3115/1075812.1075835 The Penn Treebank: annotating predicate argument structure>.
+    /// Thanks to Toni Dietze for formalizing the necessary stripping :)
     pub fn strip_predicate_annotations(&mut self) {
-        // See <http://dx.doi.org/10.3115/1075812.1075835 The Penn Treebank: annotating predicate argument structure>.
-        // Thanks to Toni Dietze for formalizing the necessary stripping :)
-        
         match self {
             &mut PTBTree::InnerNode { ref mut label, ref mut children } => {
                 // Iterate suffix removal
@@ -305,6 +315,24 @@ pub fn parse_ptb_sample_dir(mergeddir: &str) -> Vec<PTBTree> {
     for num in 1..200 {
         let filename = mergeddir.to_string() + &format!("wsj_{:04}.mrg", num);
         result.extend(parse_ptb_file(&filename).unwrap())
+    }
+    result
+}
+
+/// Parse `{mergeddir}/{section}/*.mrg` files.
+/// 
+/// Will `panic` if anything goes wrong.
+/// 
+/// Wrapper around parse_ptb_file.
+pub fn parse_ptb_sections(mergeddir: &str, sections: Vec<usize>) -> Vec<PTBTree> {
+    let mut result = Vec::new();
+    for section in sections {
+        //println!("Reading section {}", section);
+        for entry in glob(&format!("{}/{:02}/*.mrg", mergeddir, section)).unwrap() {
+            if let Ok(path) = entry {
+                result.extend(parse_ptb_file(&path.to_str().unwrap()).unwrap())
+            }
+        }
     }
     result
 }

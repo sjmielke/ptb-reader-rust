@@ -2,6 +2,9 @@
 extern crate pest;
 use pest::prelude::*;
 
+extern crate glob;
+use glob::glob;
+
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -306,6 +309,21 @@ pub fn parse_ptb_sample_dir(mergeddir: &str) -> Vec<PTBTree> {
     result
 }
 
+/// Parse any directory containing `*.mrg` files.
+/// 
+/// Will `panic` if anything goes wrong.
+/// 
+/// Wrapper around parse_ptb_file.
+pub fn parse_ptb_dir(mergeddir: &str) -> Vec<PTBTree> {
+    let mut result = Vec::new();
+    for entry in glob(&format!("{}/**/*.mrg", mergeddir)).unwrap() {
+        if let Ok(path) = entry {
+            result.extend(parse_ptb_file(&path.to_str().unwrap()).unwrap())
+        }
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -375,9 +393,14 @@ mod tests {
     }
     
     #[test]
-    #[ignore]
+    //#[ignore]
     fn parse_actual_ptb_sample() {
-        assert_eq!(3914, parse_ptb_sample_dir("/home/sjm/documents/Uni/penn-treebank-sample/treebank/combined/").len())
+        let t1 = parse_ptb_sample_dir("/home/sjm/documents/Uni/penn-treebank-sample/treebank/combined/");
+        let t2 = parse_ptb_dir("/home/sjm/documents/Uni/penn-treebank-sample/treebank/combined/");
+        
+        assert_eq!(3914, t1.len());
+        assert_eq!(3914, t2.len());
+        assert_eq!(t1, t2)
     }
     
     #[test]

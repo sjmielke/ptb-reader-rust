@@ -23,7 +23,7 @@ pub enum PTBTree {
 Parse the whole PTB sample:
 
 ```rust
-let all_trees: Vec<PTBTree> = ptb_reader::parse_ptb_sample_dir("/home/sjm/documents/Uni/penn-treebank-sample/treebank/combined/");
+let all_trees: Vec<PTBTree> = ptb_reader::parse_ptb_dir("/home/sjm/documents/Uni/penn-treebank-sample/treebank/combined/");
 ```
 
 Parse and work with an individual tree:

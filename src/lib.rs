@@ -23,11 +23,11 @@ pub enum PTBTree {
 impl PTBTree {
     /// Return bracketed (but not outside-bracketed!) PTB notation.
     fn render_simple_brackets(&self) -> String {
-        match self {
-            &PTBTree::InnerNode { ref label, ref children } => {
+        match *self {
+            PTBTree::InnerNode { ref label, ref children } => {
                 format!("({} {})", label, children.iter().map(|c| c.render_simple_brackets()).collect::<Vec<_>>().join(" "))
             }
-            &PTBTree::TerminalNode { ref label } => {
+            PTBTree::TerminalNode { ref label } => {
                 label.to_string()
             }
         }
@@ -46,9 +46,9 @@ impl PTBTree {
     
     /// Return number of terminal words, i.e. length of front.
     pub fn front_length(&self) -> usize {
-        match self {
-            &PTBTree::TerminalNode { label: _ } => 1,
-            &PTBTree::InnerNode { label: _, ref children } => {
+        match *self {
+            PTBTree::TerminalNode { .. } => 1,
+            PTBTree::InnerNode { ref children, .. } => {
                 children.iter().map(|c| c.front_length()).sum()
             }
         }
@@ -58,8 +58,8 @@ impl PTBTree {
     /// See <http://dx.doi.org/10.3115/1075812.1075835 The Penn Treebank: annotating predicate argument structure>.
     /// Thanks to Toni Dietze for formalizing the necessary stripping :)
     pub fn strip_predicate_annotations(&mut self) {
-        match self {
-            &mut PTBTree::InnerNode { ref mut label, ref mut children } => {
+        match *self {
+            PTBTree::InnerNode { ref mut label, ref mut children } => {
                 // Iterate suffix removal
                 fn strip_one_label_suffix(s: &mut String) -> bool {
                     // Any of these in-/suffixes shall be removed from inner nodes (e.g., NNP-NOM-SBJ => NNP).
@@ -96,9 +96,8 @@ impl PTBTree {
                 let mut remove_me_indices: Vec<usize> = Vec::new();
                 for (i, c) in children.iter_mut().enumerate() {
                     c.strip_predicate_annotations();
-                    let childlabel = match c {
-                        &mut PTBTree::InnerNode { ref label, children: _ } => label,
-                        &mut PTBTree::TerminalNode { ref label } => label
+                    let childlabel = match *c {
+                        PTBTree::InnerNode { ref label, .. } | PTBTree::TerminalNode { ref label } => label
                     };
                     if !childlabel.is_empty() {
                         keeps_children = true
@@ -119,7 +118,7 @@ impl PTBTree {
                     }
                 }
             }
-            &mut PTBTree::TerminalNode { ref mut label } => {
+            PTBTree::TerminalNode { ref mut label } => {
                 // Any of these are invalid leaves.
                 let other_leafs = ["*", "*?*", "*NOT*", "*U*"];
                 if other_leafs.contains(&&label[..]) {
@@ -173,7 +172,7 @@ impl std::convert::From<PTBTree> for String {
     fn from(t: PTBTree) -> String {
         match t {
             PTBTree::TerminalNode { label } => label.clone(),
-            PTBTree::InnerNode { label: _, children } => {
+            PTBTree::InnerNode { children, .. } => {
                 children.iter().map(|c| c.clone().into()).collect::<Vec<String>>().join(" ")
             }
         }
@@ -188,9 +187,9 @@ impl<'a> std::convert::From<&'a PTBTree> for String {
     /// assert_eq!(String::from(&tree), "t")
     /// ```
     fn from(t: &PTBTree) -> String {
-        match t {
-            &PTBTree::TerminalNode { ref label } => label.clone(),
-            &PTBTree::InnerNode { label: _, ref children } => {
+        match *t {
+            PTBTree::TerminalNode { ref label } => label.clone(),
+            PTBTree::InnerNode { ref children, .. } => {
                 children.iter().map(|c| c.clone().into()).collect::<Vec<String>>().join(" ")
             }
         }
@@ -309,7 +308,7 @@ pub fn parse_ptb_file(f: &str) -> Option<Vec<PTBTree>> {
 /// 
 /// Will `panic` if anything goes wrong.
 /// 
-/// Wrapper around parse_ptb_file.
+/// Wrapper around `parse_ptb_file`.
 pub fn parse_ptb_sample_dir(mergeddir: &str) -> Vec<PTBTree> {
     let mut result = Vec::new();
     for num in 1..200 {
@@ -323,14 +322,14 @@ pub fn parse_ptb_sample_dir(mergeddir: &str) -> Vec<PTBTree> {
 /// 
 /// Will `panic` if anything goes wrong.
 /// 
-/// Wrapper around parse_ptb_file.
+/// Wrapper around `parse_ptb_file`.
 pub fn parse_ptb_sections(mergeddir: &str, sections: Vec<usize>) -> Vec<PTBTree> {
     let mut result = Vec::new();
     for section in sections {
         //println!("Reading section {}", section);
         for entry in glob(&format!("{}/{:02}/*.mrg", mergeddir, section)).unwrap() {
             if let Ok(path) = entry {
-                result.extend(parse_ptb_file(&path.to_str().unwrap()).unwrap())
+                result.extend(parse_ptb_file(path.to_str().unwrap()).unwrap())
             }
         }
     }
@@ -341,12 +340,12 @@ pub fn parse_ptb_sections(mergeddir: &str, sections: Vec<usize>) -> Vec<PTBTree>
 /// 
 /// Will `panic` if anything goes wrong.
 /// 
-/// Wrapper around parse_ptb_file.
+/// Wrapper around `parse_ptb_file`.
 pub fn parse_ptb_dir(mergeddir: &str) -> Vec<PTBTree> {
     let mut result = Vec::new();
     for entry in glob(&format!("{}/**/*.mrg", mergeddir)).unwrap() {
         if let Ok(path) = entry {
-            result.extend(parse_ptb_file(&path.to_str().unwrap()).unwrap())
+            result.extend(parse_ptb_file(path.to_str().unwrap()).unwrap())
         }
     }
     result

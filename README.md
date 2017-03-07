@@ -20,9 +20,13 @@ pub enum PTBTree {
 
 ### Example usage
 
+Parse the whole PTB sample:
+
 ```rust
 let all_trees: Vec<PTBTree> = ptb_reader::parse_ptb_sample_dir("/home/sjm/documents/Uni/penn-treebank-sample/treebank/combined/");
 ```
+
+Parse and work with an individual tree:
 
 ```rust
 let s: String = "((S (NNP John) (VP (VBD saw) (NNP Mary))))";
@@ -43,5 +47,16 @@ let t: PTBTree =
 ;
 assert_eq!(parse_ptbtree(s).unwrap(), t);
 assert_eq!(format!("{}", t), s);
-assert_eq!(String::from(t), "John saw Mary");
+assert_eq!(String::from(&t), "John saw Mary");
+```
+
+Strip predicate-argument annotations:
+
+```rust
+let s: &str      = "((S (NNP     John) (VP            (VBD saw) (NNP Mary)              )))";
+let s_pred: &str = "((S (NNP-SBJ John) (VP (NP *T*-1) (VBD saw) (NNP Mary) (-NONE- nada))))";
+
+let mut t = parse_ptbtree(s_pred).unwrap();
+t.strip_predicate_annotations();
+assert_eq!(t, parse_ptbtree(s).unwrap())
 ```

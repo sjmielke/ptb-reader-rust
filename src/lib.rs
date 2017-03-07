@@ -17,14 +17,121 @@ pub enum PTBTree {
     }
 }
 
-/// Return bracketed (but not outside-bracketed!) PTB notation:
-fn print_bracketed_ptbtree(t: &PTBTree) -> String {
-    match t {
-        &PTBTree::InnerNode { ref label, ref children } => {
-            format!("({} {})", label, children.iter().map(|c| print_bracketed_ptbtree(c)).collect::<Vec<_>>().join(" "))
+impl PTBTree {
+    /// Return bracketed (but not outside-bracketed!) PTB notation.
+    fn render_simple_brackets(&self) -> String {
+        match self {
+            &PTBTree::InnerNode { ref label, ref children } => {
+                format!("({} {})", label, children.iter().map(|c| c.render_simple_brackets()).collect::<Vec<_>>().join(" "))
+            }
+            &PTBTree::TerminalNode { ref label } => {
+                label.to_string()
+            }
         }
-        &PTBTree::TerminalNode { ref label } => {
-            label.to_string()
+    }
+    
+    /// Return `String` from joined terminals at the leaves (i.e, *front*, *yield*).
+    /// 
+    /// ```rust
+    /// use ptb_reader::PTBTree;
+    /// let tree = PTBTree::InnerNode{ label: "NT".to_string(), children: vec![PTBTree::TerminalNode{ label: "t".to_string() }] };
+    /// assert_eq!(tree.front(), "t")
+    /// ```
+    pub fn front(&self) -> String {
+        String::from(self)
+    }
+    
+    pub fn strip_predicate_annotations(&mut self) {
+        // See <http://dx.doi.org/10.3115/1075812.1075835 The Penn Treebank: annotating predicate argument structure>.
+        // Thanks to Toni Dietze for formalizing the necessary stripping :)
+        
+        match self {
+            &mut PTBTree::InnerNode { ref mut label, ref mut children } => {
+                // Iterate suffix removal
+                fn strip_one_label_suffix(s: &mut String) -> bool {
+                    // Any of these in-/suffixes shall be removed from inner nodes (e.g., NNP-NOM-SBJ => NNP).
+                    let functional_suffixes = ["-HLN", "-LST", "-TTL", "-CLF", "-NOM", "-ADV", "-LGS", "-PRD", "-SBJ", "-TPC", "-CLR", "-VOC", "-DIR", "-LOC", "-MNR", "-PRP", "-TMP"];
+                    if let Some((i, _)) = s.char_indices().rev().nth(3) {
+                        if functional_suffixes.contains(&&s[i..]) {
+                            s.truncate(i);
+                            return true
+                        }
+                    }
+                    
+                    // Any dash-prefixed or equals-prefixed numbers shall be removed from inner nodes (e.g., NNP-1-12 => NNP).
+                    let mut gotdigit = false;
+                    let mut truncation_index = None;
+                    for (i, c) in s.char_indices().rev() {
+                        if c.is_digit(10) {
+                            gotdigit = true
+                        } else if (c == '-' || c == '=') && gotdigit {
+                            truncation_index = Some(i);
+                            break
+                        } else {
+                            return false
+                        }
+                    }
+                    match truncation_index {
+                        None => false,
+                        Some(i) => {s.truncate(i); true}
+                    }
+                }
+                while strip_one_label_suffix(label) {}
+                
+                // Recurse over children
+                let mut keeps_children = false;
+                let mut remove_me_indices: Vec<usize> = Vec::new();
+                for (i, c) in children.iter_mut().enumerate() {
+                    c.strip_predicate_annotations();
+                    let childlabel = match c {
+                        &mut PTBTree::InnerNode { ref label, children: _ } => label,
+                        &mut PTBTree::TerminalNode { ref label } => label
+                    };
+                    if !childlabel.is_empty() {
+                        keeps_children = true
+                    } else {
+                        remove_me_indices.push(i)
+                    }
+                }
+                
+                
+                // Mark inner node itself for deletion
+                if !keeps_children || label == "-NONE-" {
+                    *label = "".to_string();
+                }
+                // Remove from back to front
+                else {
+                    for &i in remove_me_indices.iter().rev() {
+                        children.remove(i);
+                    }
+                }
+            }
+            &mut PTBTree::TerminalNode { ref mut label } => {
+                // Any of these are invalid leaves.
+                let other_leafs = ["*", "*?*", "*NOT*", "*U*"];
+                if other_leafs.contains(&&label[..]) {
+                    *label = "".to_string();
+                    return
+                }
+                
+                // Any of these plus any digits are invalid leaves.
+                for pref in ["*-", "*T*-", "*ICH*-", "*PPA*-", "*RNR*-", "*EXP*-"].into_iter() {
+                    if label.starts_with(pref) {
+                        let mut gotdigit = false;
+                        for c in label[pref.len()..].chars() {
+                            if c.is_digit(10) {
+                                gotdigit = true
+                            } else {
+                                break
+                            }
+                        }
+                        if gotdigit {
+                            *label = "".to_string();
+                            return
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -38,7 +145,7 @@ impl std::fmt::Display for PTBTree {
     /// assert_eq!(format!("{}", tree), "((NT t))")
     /// ```
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "({})", print_bracketed_ptbtree(self))
+        write!(f, "({})", self.render_simple_brackets())
     }
 }
 
@@ -54,6 +161,23 @@ impl std::convert::From<PTBTree> for String {
         match t {
             PTBTree::TerminalNode { label } => label.clone(),
             PTBTree::InnerNode { label: _, children } => {
+                children.iter().map(|c| c.clone().into()).collect::<Vec<String>>().join(" ")
+            }
+        }
+    }
+}
+impl<'a> std::convert::From<&'a PTBTree> for String {
+    /// Conversion into String of terminals at the leaves (i.e, *front*, *yield*).
+    ///
+    /// ```rust
+    /// use ptb_reader::PTBTree;
+    /// let tree = PTBTree::InnerNode{ label: "NT".to_string(), children: vec![PTBTree::TerminalNode{ label: "t".to_string() }] };
+    /// assert_eq!(String::from(&tree), "t")
+    /// ```
+    fn from(t: &PTBTree) -> String {
+        match t {
+            &PTBTree::TerminalNode { ref label } => label.clone(),
+            &PTBTree::InnerNode { label: _, ref children } => {
                 children.iter().map(|c| c.clone().into()).collect::<Vec<String>>().join(" ")
             }
         }
@@ -276,6 +400,39 @@ mod tests {
         ;
         assert_eq!(parse_ptbtree(s).unwrap(), t);
         assert_eq!(format!("{}", t), s);
-        assert_eq!(String::from(t), "John saw Mary");
+        assert_eq!(t.front(), "John saw Mary");
+        
+        let s: &str      = "((S (NNP     John) (VP            (VBD saw) (NNP Mary)              )))";
+        let s_pred: &str = "((S (NNP-SBJ John) (VP (NP *T*-1) (VBD saw) (NNP Mary) (-NONE- nada))))";
+
+        let mut t = parse_ptbtree(s_pred).unwrap();
+        t.strip_predicate_annotations();
+        assert_eq!(t, parse_ptbtree(s).unwrap())
+    }
+    
+    #[test]
+    fn test_predicate_annotations_removal() {
+        // ((S
+        //         (NNP-NOM-SBJ
+        //             (N John)
+        //             (* K.)
+        //             (-NONE- nay)
+        //         )
+        //         (VP-PRD
+        //             (VBD-12-15 verbed)
+        //             (*T*-42 something)
+        //         )
+        //         (nuh-uh *T*-42)
+        //         ($ *)
+        //         (. .)
+        //         (! !)
+        // ))
+        
+        let mut full_t = parse_ptbtree("((S (NNP-NOM-SBJ (N John) (* K.) (-NONE- nay)) (VP-PRD (VBD-12-15 verbed) (*T*-42 something)) (nuh-uh *T*-42) ($ *) (. .) (! !)))").unwrap();
+        let stripped_t = parse_ptbtree("((S (NNP (N John) (* K.)) (VP (VBD verbed) (*T* something)) (. .) (! !)))").unwrap();
+        
+        full_t.strip_predicate_annotations();
+        
+        assert_eq!(full_t, stripped_t);
     }
 }

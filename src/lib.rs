@@ -354,6 +354,7 @@ pub fn parse_ptb_dir(mergeddir: &str) -> Vec<PTBTree> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
     
     fn sample_tree() -> PTBTree {
         PTBTree::InnerNode{ label: "ROOT".to_string(), children: vec![
@@ -484,5 +485,28 @@ mod tests {
         full_t.strip_predicate_annotations();
         
         assert_eq!(full_t, stripped_t);
+    }
+    
+    #[test]
+    #[ignore]
+    fn words_in_testset() {
+        let mut tokens = 0;
+        let mut types: HashSet<String> = HashSet::new();
+        let mut sentlengths: Vec<usize> = Vec::new();
+        for mut t in parse_ptb_sections("/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj", vec![22]) {
+            t.strip_predicate_annotations();
+            let sentlen = t.front_length();
+            tokens += sentlen;
+            sentlengths.push(sentlen);
+            for w in t.front().split(' ') {
+                types.insert(w.to_string());
+            }
+        }
+        println!("Tokens in test: {}, Types in test: {}", tokens, types.len());
+        println!("Sentence lengths:");
+        sentlengths.sort();
+        for v in sentlengths {
+            print!("{} ", v)
+        }
     }
 }

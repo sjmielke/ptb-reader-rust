@@ -46,8 +46,8 @@ let t: PTBTree =
     ] }
 ;
 assert_eq!(parse_ptbtree(s).unwrap(), t);
-assert_eq!(format!("{}", t), s);
-assert_eq!(String::from(&t), "John saw Mary");
+assert_eq!(t.render(), s);
+assert_eq!(t.front(), "John saw Mary");
 ```
 
 Strip predicate-argument annotations:
@@ -57,6 +57,6 @@ let s: &str      = "((S (NNP     John) (VP            (VBD saw) (NNP Mary)      
 let s_pred: &str = "((S (NNP-SBJ John) (VP (NP *T*-1) (VBD saw) (NNP Mary) (-NONE- nada))))";
 
 let mut t = parse_ptbtree(s_pred).unwrap();
-t.strip_predicate_annotations();
+t.strip_all_predicate_annotations();
 assert_eq!(t, parse_ptbtree(s).unwrap())
 ```

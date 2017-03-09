@@ -33,6 +33,17 @@ impl PTBTree {
         }
     }
     
+    /// Return bracketed (and outside-bracketed!) PTB notation:
+    ///
+    /// ```rust
+    /// use ptb_reader::PTBTree;
+    /// let tree = PTBTree::InnerNode{ label: "NT".to_string(), children: vec![PTBTree::TerminalNode{ label: "t".to_string() }] };
+    /// assert_eq!(tree.render(), "((NT t))")
+    /// ```
+    pub fn render(&self) -> String {
+        format!("({})", self.render_simple_brackets())
+    }
+    
     /// Return `String` from joined terminals at the leaves (i.e, *front*, *yield*).
     /// 
     /// ```rust
@@ -54,10 +65,15 @@ impl PTBTree {
         }
     }
     
+    #[deprecated(since="0.5.0", note="please use `strip_all_predicate_annotations` instead")]
+    pub fn strip_predicate_annotations(&mut self) {
+        self.strip_all_predicate_annotations()
+    }
+    
     /// Remove predicate-argument annotations and trace elements.
     /// See <http://dx.doi.org/10.3115/1075812.1075835 The Penn Treebank: annotating predicate argument structure>.
     /// Thanks to Toni Dietze for formalizing the necessary stripping :)
-    pub fn strip_predicate_annotations(&mut self) {
+    pub fn strip_all_predicate_annotations(&mut self) {
         match *self {
             PTBTree::InnerNode { ref mut label, ref mut children } => {
                 // Iterate suffix removal
@@ -95,7 +111,7 @@ impl PTBTree {
                 let mut keeps_children = false;
                 let mut remove_me_indices: Vec<usize> = Vec::new();
                 for (i, c) in children.iter_mut().enumerate() {
-                    c.strip_predicate_annotations();
+                    c.strip_all_predicate_annotations();
                     let childlabel = match *c {
                         PTBTree::InnerNode { ref label, .. } | PTBTree::TerminalNode { ref label } => label
                     };
@@ -149,18 +165,13 @@ impl PTBTree {
 }
 
 impl std::fmt::Display for PTBTree {
-    /// Return bracketed (and outside-bracketed!) PTB notation:
-    ///
-    /// ```rust
-    /// use ptb_reader::PTBTree;
-    /// let tree = PTBTree::InnerNode{ label: "NT".to_string(), children: vec![PTBTree::TerminalNode{ label: "t".to_string() }] };
-    /// assert_eq!(format!("{}", tree), "((NT t))")
-    /// ```
+    /// Calls `self.render()`.
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "({})", self.render_simple_brackets())
+        write!(f, "{}", self.render())
     }
 }
 
+#[deprecated(since="0.5.0", note="please use `self.front()` instead")]
 impl std::convert::From<PTBTree> for String {
     /// Conversion into String of terminals at the leaves (i.e, *front*, *yield*).
     ///
@@ -178,6 +189,7 @@ impl std::convert::From<PTBTree> for String {
         }
     }
 }
+#[deprecated(since="0.5.0", note="please use `self.front()` instead")]
 impl<'a> std::convert::From<&'a PTBTree> for String {
     /// Conversion into String of terminals at the leaves (i.e, *front*, *yield*).
     ///
@@ -450,14 +462,14 @@ mod tests {
             ] }
         ;
         assert_eq!(parse_ptbtree(s).unwrap(), t);
-        assert_eq!(format!("{}", t), s);
+        assert_eq!(t.render(), s);
         assert_eq!(t.front(), "John saw Mary");
         
         let s: &str      = "((S (NNP     John) (VP            (VBD saw) (NNP Mary)              )))";
         let s_pred: &str = "((S (NNP-SBJ John) (VP (NP *T*-1) (VBD saw) (NNP Mary) (-NONE- nada))))";
 
         let mut t = parse_ptbtree(s_pred).unwrap();
-        t.strip_predicate_annotations();
+        t.strip_all_predicate_annotations();
         assert_eq!(t, parse_ptbtree(s).unwrap())
     }
     
@@ -482,7 +494,7 @@ mod tests {
         let mut full_t = parse_ptbtree("((S (NNP-NOM-SBJ (N John) (* K.) (-NONE- nay)) (VP-PRD (VBD-12-15 verbed) (*T*-42 something)) (nuh-uh *T*-42) ($ *) (. .) (! !)))").unwrap();
         let stripped_t = parse_ptbtree("((S (NNP (N John) (* K.)) (VP (VBD verbed) (*T* something)) (. .) (! !)))").unwrap();
         
-        full_t.strip_predicate_annotations();
+        full_t.strip_all_predicate_annotations();
         
         assert_eq!(full_t, stripped_t);
     }
@@ -494,7 +506,7 @@ mod tests {
         let mut types: HashSet<String> = HashSet::new();
         let mut sentlengths: Vec<usize> = Vec::new();
         for mut t in parse_ptb_sections("/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj", vec![22]) {
-            t.strip_predicate_annotations();
+            t.strip_all_predicate_annotations();
             let sentlen = t.front_length();
             tokens += sentlen;
             sentlengths.push(sentlen);

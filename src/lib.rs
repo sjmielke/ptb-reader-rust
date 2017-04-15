@@ -52,7 +52,35 @@ impl PTBTree {
     /// assert_eq!(tree.front(), "t")
     /// ```
     pub fn front(&self) -> String {
-        String::from(self)
+        match *self {
+            PTBTree::TerminalNode { ref label } => label.clone(),
+            PTBTree::InnerNode { ref children, .. } => {
+                children.iter().map(|c| c.front()).collect::<Vec<String>>().join(" ")
+            }
+        }
+    }
+    
+    /// Return `String` from joined pre-terminals (i.e., POS tags).
+    /// 
+    /// ```rust
+    /// use ptb_reader::PTBTree;
+    /// let tree = PTBTree::InnerNode{ label: "NT".to_string(), children: vec![PTBTree::TerminalNode{ label: "t".to_string() }] };
+    /// assert_eq!(tree.pos_front(), "NT")
+    /// ```
+    pub fn pos_front(&self) -> String {
+        match *self {
+            PTBTree::TerminalNode { .. } => panic!("Encountered unexpected terminal while getting the POS front!"),
+            PTBTree::InnerNode { ref children, ref label } => {
+                //if let [PTBTree::TerminalNode { label } ] = children {
+                if children.len() == 1 {
+                    if let PTBTree::TerminalNode { .. } = children[0] {
+                        return label.clone()
+                    }
+                }
+                
+                children.iter().map(|c| c.pos_front()).collect::<Vec<String>>().join(" ")
+            }
+        }
     }
     
     /// Return number of terminal words, i.e. length of front.
@@ -63,11 +91,6 @@ impl PTBTree {
                 children.iter().map(|c| c.front_length()).sum()
             }
         }
-    }
-    
-    #[deprecated(since="0.5.0", note="please use `strip_all_predicate_annotations` instead")]
-    pub fn strip_predicate_annotations(&mut self) {
-        self.strip_all_predicate_annotations()
     }
     
     /// Remove predicate-argument annotations and trace elements.
@@ -168,43 +191,6 @@ impl std::fmt::Display for PTBTree {
     /// Calls `self.render()`.
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.render())
-    }
-}
-
-#[deprecated(since="0.5.0", note="please use `self.front()` instead")]
-impl std::convert::From<PTBTree> for String {
-    /// Conversion into String of terminals at the leaves (i.e, *front*, *yield*).
-    ///
-    /// ```rust
-    /// use ptb_reader::PTBTree;
-    /// let tree = PTBTree::InnerNode{ label: "NT".to_string(), children: vec![PTBTree::TerminalNode{ label: "t".to_string() }] };
-    /// assert_eq!(String::from(tree), "t")
-    /// ```
-    fn from(t: PTBTree) -> String {
-        match t {
-            PTBTree::TerminalNode { label } => label.clone(),
-            PTBTree::InnerNode { children, .. } => {
-                children.iter().map(|c| c.clone().into()).collect::<Vec<String>>().join(" ")
-            }
-        }
-    }
-}
-#[deprecated(since="0.5.0", note="please use `self.front()` instead")]
-impl<'a> std::convert::From<&'a PTBTree> for String {
-    /// Conversion into String of terminals at the leaves (i.e, *front*, *yield*).
-    ///
-    /// ```rust
-    /// use ptb_reader::PTBTree;
-    /// let tree = PTBTree::InnerNode{ label: "NT".to_string(), children: vec![PTBTree::TerminalNode{ label: "t".to_string() }] };
-    /// assert_eq!(String::from(&tree), "t")
-    /// ```
-    fn from(t: &PTBTree) -> String {
-        match *t {
-            PTBTree::TerminalNode { ref label } => label.clone(),
-            PTBTree::InnerNode { ref children, .. } => {
-                children.iter().map(|c| c.clone().into()).collect::<Vec<String>>().join(" ")
-            }
-        }
     }
 }
 
@@ -380,9 +366,8 @@ mod tests {
                 PTBTree::InnerNode{ label: "C".to_string(), children: vec![
                     PTBTree::TerminalNode{ label: "1".to_string() }
                 ] },
-                PTBTree::TerminalNode{ label: "2".to_string() },
                 PTBTree::InnerNode{ label: "D".to_string(), children: vec![
-                    PTBTree::TerminalNode{ label: "1".to_string() }
+                    PTBTree::TerminalNode{ label: "2".to_string() }
                 ] }
             ] }
         ] }
@@ -409,14 +394,20 @@ mod tests {
     }
     
     #[test]
-    fn yield_of_ptb_tree() {
-        let s: String = sample_tree().into();
-        assert_eq!(s, "2 1 1 2 1")
+    fn front_of_ptb_tree() {
+        let s: String = sample_tree().front();
+        assert_eq!(s, "2 1 1 2")
+    }
+    
+    #[test]
+    fn pos_front_of_ptb_tree() {
+        let s: String = sample_tree().pos_front();
+        assert_eq!(s, "A B C D")
     }
     
     #[test]
     fn test_ptbtree_display() {
-        let s = "((ROOT (A 2) (X (B 1) (C 1) 2 (D 1))))";
+        let s = "((ROOT (A 2) (X (B 1) (C 1) (D 2))))";
         assert_eq!(format!("{}", sample_tree()), s)
     }
     

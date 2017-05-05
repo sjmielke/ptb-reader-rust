@@ -303,15 +303,19 @@ pub fn parse_ptb_file(f: &str) -> Option<Vec<PTBTree>> {
 }
 
 /// Parse a single-bracketed, 1-per-line PTB file (SPMRL file format),
-/// removing morph tags on non-terminals.
+/// removing morph tags on non-terminals and replacing underscores with --- in NTs!
+/// If `remove_after_dash` is set to True, it will even remove everything after a dash
+/// (this is applied before the underscore-replacing, of course).
 ///
 /// Just reads line per line, prepends '(' and appends ')' and calls `parse_ptbtrees`.
-pub fn parse_spmrl_ptb_file(f: &str) -> Option<Vec<PTBTree>> {
-    fn remove_morphtags(t: PTBTree) -> PTBTree {
+pub fn parse_spmrl_ptb_file(f: &str, remove_after_dash: bool) -> Option<Vec<PTBTree>> {
+    fn remove_morphtags(t: PTBTree, remove_after_dash: bool) -> PTBTree {
         match t {
             PTBTree::InnerNode{label,children} => {
                 let newlabel = label.split("##").next().unwrap().to_string();
-                let newchildren = children.into_iter().map(remove_morphtags).collect::<Vec<_>>();
+                let newlabel = if remove_after_dash {label.split("-").next().unwrap().to_string()} else {newlabel};
+                let newlabel = newlabel.replace("_", "---");
+                let newchildren = children.into_iter().map(|c| remove_morphtags(c, remove_after_dash)).collect::<Vec<_>>();
                 PTBTree::InnerNode { label: newlabel, children: newchildren }
             }
             n@PTBTree::TerminalNode{..} => n
@@ -332,7 +336,10 @@ pub fn parse_spmrl_ptb_file(f: &str) -> Option<Vec<PTBTree>> {
                 if parses.iter().any(|o| o.is_none()) {
                     None
                 } else {
-                    Some(parses.into_iter().map(|s| remove_morphtags(s.unwrap())).collect::<Vec<PTBTree>>())
+                    Some(parses
+                        .into_iter()
+                        .map(|s| remove_morphtags(s.unwrap(), remove_after_dash))
+                        .collect::<Vec<PTBTree>>())
                 }
             }
         }
@@ -577,7 +584,7 @@ mod tests {
     
     #[test]
     fn parse_spmrl_ptb() {
-        match parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb/train5k/train5k.German.gold.ptb") {
+        match parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb/train5k/train5k.German.gold.ptb", false) {
         //match parse_sb_ptb_file("/tmp/ger.ptb") {
             None => println!("\nError!\n"),
             Some(p) => println!("\nSuccess!\n{}", p[0])

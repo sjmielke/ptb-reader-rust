@@ -302,6 +302,43 @@ pub fn parse_ptb_file(f: &str) -> Option<Vec<PTBTree>> {
     }
 }
 
+/// Parse a single-bracketed, 1-per-line PTB file (SPMRL file format),
+/// removing morph tags on non-terminals.
+///
+/// Just reads line per line, prepends '(' and appends ')' and calls `parse_ptbtrees`.
+pub fn parse_spmrl_ptb_file(f: &str) -> Option<Vec<PTBTree>> {
+    fn remove_morphtags(t: PTBTree) -> PTBTree {
+        match t {
+            PTBTree::InnerNode{label,children} => {
+                let newlabel = label.split("##").next().unwrap().to_string();
+                let newchildren = children.into_iter().map(remove_morphtags).collect::<Vec<_>>();
+                PTBTree::InnerNode { label: newlabel, children: newchildren }
+            }
+            n@PTBTree::TerminalNode{..} => n
+        }
+    }
+    
+    let mut contents = String::new();
+    match File::open(f) {
+        Err(_) => None,
+        Ok(mut fh) => match fh.read_to_string(&mut contents) {
+            Err(_) => None,
+            Ok(_) => {
+                let parses = contents
+                    .split('\n')
+                    .filter(|s| *s != "")
+                    .map(|s| parse_ptbtree(&format!("({})", s)))
+                    .collect::<Vec<Option<PTBTree>>>();
+                if parses.iter().any(|o| o.is_none()) {
+                    None
+                } else {
+                    Some(parses.into_iter().map(|s| remove_morphtags(s.unwrap())).collect::<Vec<PTBTree>>())
+                }
+            }
+        }
+    }
+}
+
 /// Parse the free PTB sample files (`wsj_0001.mrg` to `wsj_0199.mrg`).
 /// 
 /// Will `panic` if anything goes wrong.
@@ -426,12 +463,37 @@ mod tests {
     #[test]
     //#[ignore]
     fn parse_actual_ptb_sample() {
-        let t1 = parse_ptb_sample_dir("/home/sjm/documents/Uni/penn-treebank-sample/treebank/combined/");
-        let t2 = parse_ptb_dir("/home/sjm/documents/Uni/penn-treebank-sample/treebank/combined/");
+        let t1 = parse_ptb_sample_dir("/home/sjm/documents/Uni/FuzzySP/penn-treebank-sample/treebank/combined/");
+        let t2 = parse_ptb_dir("/home/sjm/documents/Uni/FuzzySP/penn-treebank-sample/treebank/combined/");
         
         assert_eq!(3914, t1.len());
         assert_eq!(3914, t2.len());
         assert_eq!(t1, t2)
+    }
+    
+    #[test]
+    #[ignore]
+    fn extract_trainset_yield() {
+        for (range, name) in vec![((2..22), "2-21"), ((22..23), "22")] {
+            let train_trees = parse_ptb_sections("/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj", range.collect());
+            let mut yields: Vec<String> = Vec::new();
+            let mut pos_yields: Vec<String> = Vec::new();
+            
+            for mut t in train_trees {
+                t.strip_all_predicate_annotations();
+                yields.push(t.front() + "\n");
+                pos_yields.push(t.pos_front() + "\n")
+            }
+            
+            let mut f = File::create(format!("/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/pos-tagging/data/ptb.{}.lex", name)).expect("Unable to create file");
+            for y in &yields {
+                f.write_all(y.as_bytes()).expect("Unable to write data")
+            }
+            let mut f = File::create(format!("/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/pos-tagging/data/ptb.{}.tag", name)).expect("Unable to create file");
+            for y in &pos_yields {
+                f.write_all(y.as_bytes()).expect("Unable to write data")
+            }
+        }
     }
     
     #[test]
@@ -510,6 +572,15 @@ mod tests {
         sentlengths.sort();
         for v in sentlengths {
             print!("{} ", v)
+        }
+    }
+    
+    #[test]
+    fn parse_spmrl_ptb() {
+        match parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb/train5k/train5k.German.gold.ptb") {
+        //match parse_sb_ptb_file("/tmp/ger.ptb") {
+            None => println!("\nError!\n"),
+            Some(p) => println!("\nSuccess!\n{}", p[0])
         }
     }
 }

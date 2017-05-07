@@ -5,6 +5,9 @@ use pest::prelude::*;
 extern crate glob;
 use glob::glob;
 
+extern crate simple_error;
+use simple_error::SimpleError;
+
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -302,13 +305,13 @@ pub fn parse_ptb_file(f: &str) -> Option<Vec<PTBTree>> {
     }
 }
 
-/// Parse a single-bracketed, 1-per-line PTB file (SPMRL file format),
+/// Parse a 1-per-line PTB file (SPMRL file format) (single-bracketed possible),
 /// removing morph tags on non-terminals and replacing underscores with --- in NTs!
 /// If `remove_after_dash` is set to True, it will even remove everything after a dash
 /// (this is applied before the underscore-replacing, of course).
 ///
 /// Just reads line per line, prepends '(' and appends ')' and calls `parse_ptbtrees`.
-pub fn parse_spmrl_ptb_file(f: &str, remove_after_dash: bool) -> Option<Vec<PTBTree>> {
+pub fn parse_spmrl_ptb_file(f: &str, singlebracketed: bool, remove_after_dash: bool) -> Result<Vec<PTBTree>, Box<std::error::Error>> {
     fn remove_morphtags(t: PTBTree, remove_after_dash: bool) -> PTBTree {
         match t {
             PTBTree::InnerNode{label,children} => {
@@ -323,24 +326,25 @@ pub fn parse_spmrl_ptb_file(f: &str, remove_after_dash: bool) -> Option<Vec<PTBT
     }
     
     let mut contents = String::new();
-    match File::open(f) {
-        Err(_) => None,
-        Ok(mut fh) => match fh.read_to_string(&mut contents) {
-            Err(_) => None,
-            Ok(_) => {
-                let parses = contents
-                    .split('\n')
-                    .filter(|s| *s != "")
-                    .map(|s| parse_ptbtree(&format!("({})", s)))
-                    .collect::<Vec<Option<PTBTree>>>();
-                if parses.iter().any(|o| o.is_none()) {
-                    None
-                } else {
-                    Some(parses
-                        .into_iter()
-                        .map(|s| remove_morphtags(s.unwrap(), remove_after_dash))
-                        .collect::<Vec<PTBTree>>())
-                }
+    match File::open(f)?.read_to_string(&mut contents) {
+        Err(e) => Err(Box::new(e)),
+        Ok(_) => {
+            let lines = contents
+                .split('\n')
+                .filter(|s| *s != "")
+                .collect::<Vec<&str>>();
+            let parses: Vec<Option<PTBTree>> = if singlebracketed {
+                lines.into_iter().map(|s| parse_ptbtree(&format!("({})", s))).collect()
+            } else {
+                lines.into_iter().map(parse_ptbtree).collect()
+            };
+            if parses.iter().any(|o| o.is_none()) {
+                Err(Box::new(SimpleError::new("Some parses were none!")))
+            } else {
+                Ok(parses
+                    .into_iter()
+                    .map(|s| remove_morphtags(s.unwrap(), remove_after_dash))
+                    .collect::<Vec<PTBTree>>())
             }
         }
     }
@@ -584,10 +588,12 @@ mod tests {
     
     #[test]
     fn parse_spmrl_ptb() {
-        match parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb/train5k/train5k.German.gold.ptb", false) {
-        //match parse_sb_ptb_file("/tmp/ger.ptb") {
-            None => println!("\nError!\n"),
-            Some(p) => println!("\nSuccess!\n{}", p[0])
+        let lang1 = "GERMAN";
+        let lang2 = "German";
+        let path = format!("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/{}_SPMRL/gold/ptb/train5k/train5k.{}.gold.ptb", lang1, lang2);
+        match parse_spmrl_ptb_file(&path, true, false) {
+            Err(e) => println!("\nError!\n{}", e),
+            Ok(p) => println!("\nSuccess!\n{}", p[0])
         }
     }
 }

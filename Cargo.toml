@@ -1,6 +1,6 @@
 [package]
 name = "ptb-reader"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["Sebastian J. Mielke <githubcontact@sjmielke.com>"]
 repository = "https://github.com/sjmielke/ptb-reader-rust"
 homepage = "https://github.com/sjmielke/ptb-reader-rust"
@@ -13,3 +13,4 @@ categories = ["parsing", "science", "text-processing"]
 [dependencies]
 pest = "0.4"
 glob = "0.2.11"
+simple-error = "0.1"

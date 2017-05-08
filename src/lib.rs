@@ -316,7 +316,7 @@ pub fn parse_spmrl_ptb_file(f: &str, singlebracketed: bool, remove_after_dash: b
         match t {
             PTBTree::InnerNode{label,children} => {
                 let newlabel = label.split("##").next().unwrap().to_string();
-                let newlabel = if remove_after_dash {label.split("-").next().unwrap().to_string()} else {newlabel};
+                let newlabel = if remove_after_dash {newlabel.split("-").next().unwrap().to_string()} else {newlabel};
                 let newlabel = newlabel.replace("_", "---");
                 let newchildren = children.into_iter().map(|c| remove_morphtags(c, remove_after_dash)).collect::<Vec<_>>();
                 PTBTree::InnerNode { label: newlabel, children: newchildren }
@@ -588,8 +588,8 @@ mod tests {
     
     #[test]
     fn parse_spmrl_ptb() {
-        let lang1 = "GERMAN";
-        let lang2 = "German";
+        let lang1 = "KOREAN";
+        let lang2 = "Korean";
         let path = format!("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/{}_SPMRL/gold/ptb/train5k/train5k.{}.gold.ptb", lang1, lang2);
         match parse_spmrl_ptb_file(&path, true, false) {
             Err(e) => println!("\nError!\n{}", e),

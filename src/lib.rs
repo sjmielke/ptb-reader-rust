@@ -11,8 +11,10 @@ use simple_error::SimpleError;
 use std::fs::File;
 use std::io::prelude::*;
 
+use std::collections::BinaryHeap;
+
 /// Arbitrarily wide recursive trees of `String`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub enum PTBTree {
     InnerNode {
         label: String,
@@ -484,7 +486,7 @@ mod tests {
     
     #[test]
     #[ignore]
-    fn extract_trainset_yield() {
+    fn extract_ptb_trainset_yield() {
         for (range, name) in vec![((2..22), "2-21"), ((22..23), "22")] {
             let train_trees = parse_ptb_sections("/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj", range.collect());
             let mut yields: Vec<String> = Vec::new();
@@ -503,6 +505,34 @@ mod tests {
             let mut f = File::create(format!("/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/pos-tagging/data/ptb.{}.tag", name)).expect("Unable to create file");
             for y in &pos_yields {
                 f.write_all(y.as_bytes()).expect("Unable to write data")
+            }
+        }
+    }
+    
+    #[test]
+    #[ignore]
+    fn extract_spmrl_trainset_yield() {
+        for (lang1, lang2, singlebracketed) in vec![("GERMAN", "German", true)] {
+            for setname in vec!["train", "dev"] {
+                let path = format!("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/{}_SPMRL/gold/ptb/{}/{}.{}.gold.ptb", lang1, setname, setname, lang2);
+                let train_trees: Vec<PTBTree> = parse_spmrl_ptb_file(&path, singlebracketed, true).expect(&format!("Couldn't get {}", path));
+                let mut yields: Vec<String> = Vec::new();
+                let mut pos_yields: Vec<String> = Vec::new();
+                
+                for mut t in train_trees {
+                    t.strip_all_predicate_annotations();
+                    yields.push(t.front() + "\n");
+                    pos_yields.push(t.pos_front() + "\n")
+                }
+                
+                let mut f = File::create(format!("/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/pos-tagging/data/spmrl.{}.{}.lex", lang1, setname)).expect("Unable to create file");
+                for y in &yields {
+                    f.write_all(y.as_bytes()).expect("Unable to write data")
+                }
+                let mut f = File::create(format!("/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/pos-tagging/data/spmrl.{}.{}.tag", lang1, setname)).expect("Unable to create file");
+                for y in &pos_yields {
+                    f.write_all(y.as_bytes()).expect("Unable to write data")
+                }
             }
         }
     }
@@ -537,6 +567,67 @@ mod tests {
         assert_eq!(t, parse_ptbtree(s).unwrap())
     }
     
+    #[derive(PartialEq)]
+    struct PTBT(usize, PTBTree, PTBTree);
+    impl ::std::cmp::Eq for PTBT {}
+    impl ::std::cmp::PartialOrd for PTBT {
+        fn partial_cmp(&self, other: &Self) -> Option<::std::cmp::Ordering> {
+            Some(self.0.cmp(&other.0).reverse())
+        }
+    }
+    impl ::std::cmp::Ord for PTBT {
+        fn cmp(&self, other: &Self) -> ::std::cmp::Ordering {
+            self.0.cmp(&other.0).reverse()
+        }
+    }
+    
+    #[test]
+    #[ignore]
+    fn visualize_removal_on_ptb() {
+        let mut ptbts: BinaryHeap<PTBT> = BinaryHeap::new();
+        
+        for mut t in parse_ptb_sections("/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj", vec![2,3,4,5,6,7]) {
+            let t_old = t.clone();
+            let t_old_str = t_old.render_simple_brackets();
+            t.strip_all_predicate_annotations();
+            if t_old_str.contains("NONE") && t_old_str.contains("*-1") && t_old_str.contains("*?*") {
+                ptbts.push(PTBT(t_old.front_length(), t_old, t));
+            }
+        }
+        
+        for _ in 0..20 {
+            let PTBT(_, t_old, t) = ptbts.pop().unwrap();
+            println!("{}", t_old);
+            println!("{}\n", t);
+        }
+    }
+    
+    #[test]
+    #[ignore]
+    fn visualize_removal_on_spmrl() {
+        for (lang1, lang2, singlebracketed) in vec![("GERMAN", "German", true), ("KOREAN", "Korean", true), ("ARABIC", "Arabic", true), ("FRENCH", "French", false)] {
+            let path = format!("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/{}_SPMRL/gold/ptb/train5k/train5k.{}.gold.ptb", lang1, lang2);
+            let ts1 = parse_spmrl_ptb_file(&path, singlebracketed, false).unwrap();
+            let ts2 = parse_spmrl_ptb_file(&path, singlebracketed, true).unwrap();
+            
+            let mut ptbts: BinaryHeap<PTBT> = BinaryHeap::new();
+            
+            for (t1, t2) in ts1.into_iter().zip(ts2) {
+                if t1 != t2 {
+                    ptbts.push(PTBT(t1.front_length(), t1, t2));
+                }
+            }
+            
+            println!("\n{}", lang2);
+            for _ in 0..5 {
+                if let Some(PTBT(_, t1, t2)) = ptbts.pop() {
+                    println!("{}", t1);
+                    println!("{}\n", t2);
+                }
+            }
+        }
+    }
+    
     #[test]
     fn test_predicate_annotations_removal() {
         // ((S
@@ -561,6 +652,50 @@ mod tests {
         full_t.strip_all_predicate_annotations();
         
         assert_eq!(full_t, stripped_t);
+    }
+    
+    #[test]
+    #[ignore]
+    fn write_out_clean_tbs() {
+        fn render_all(v: Vec<PTBTree>) -> String {
+            v.into_iter().map(|mut t| {t.strip_all_predicate_annotations();t.render()}).collect::<Vec<String>>().join("\n") + "\n"
+        }
+        
+        let train_en = parse_ptb_sections("/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj", (2..22).collect());
+        let train_de = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb/train/train.German.gold.ptb", true, true).unwrap();
+        let train_ko = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/KOREAN_SPMRL/gold/ptb/train/train.Korean.gold.ptb", true, true).unwrap();
+        let train_ar = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/ARABIC_SPMRL/gold/ptb/train/train.Arabic.gold.ptb", true, true).unwrap();
+        let train_fr = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/FRENCH_SPMRL/gold/ptb/train/train.French.gold.ptb", false, true).unwrap();
+        
+        File::create("/tmp/corps/English.train.tb").unwrap().write_all(render_all(train_en).as_bytes()).unwrap();
+        File::create("/tmp/corps/German.train.tb").unwrap().write_all(render_all(train_de).as_bytes()).unwrap();
+        File::create("/tmp/corps/Korean.train.tb").unwrap().write_all(render_all(train_ko).as_bytes()).unwrap();
+        File::create("/tmp/corps/Arabic.train.tb").unwrap().write_all(render_all(train_ar).as_bytes()).unwrap();
+        File::create("/tmp/corps/French.train.tb").unwrap().write_all(render_all(train_fr).as_bytes()).unwrap();
+        
+        let dev_en = parse_ptb_sections("/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj", vec![22]);
+        let dev_de = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb/dev/dev.German.gold.ptb", true, true).unwrap();
+        let dev_ko = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/KOREAN_SPMRL/gold/ptb/dev/dev.Korean.gold.ptb", true, true).unwrap();
+        let dev_ar = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/ARABIC_SPMRL/gold/ptb/dev/dev.Arabic.gold.ptb", true, true).unwrap();
+        let dev_fr = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/FRENCH_SPMRL/gold/ptb/dev/dev.French.gold.ptb", false, true).unwrap();
+        
+        File::create("/tmp/corps/English.dev.tb").unwrap().write_all(render_all(dev_en).as_bytes()).unwrap();
+        File::create("/tmp/corps/German.dev.tb").unwrap().write_all(render_all(dev_de).as_bytes()).unwrap();
+        File::create("/tmp/corps/Korean.dev.tb").unwrap().write_all(render_all(dev_ko).as_bytes()).unwrap();
+        File::create("/tmp/corps/Arabic.dev.tb").unwrap().write_all(render_all(dev_ar).as_bytes()).unwrap();
+        File::create("/tmp/corps/French.dev.tb").unwrap().write_all(render_all(dev_fr).as_bytes()).unwrap();
+        
+        let test_en = parse_ptb_sections("/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj", vec![23]);
+        let test_de = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb/test/test.German.gold.ptb", true, true).unwrap();
+        let test_ko = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/KOREAN_SPMRL/gold/ptb/test/test.Korean.gold.ptb", true, true).unwrap();
+        let test_ar = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/ARABIC_SPMRL/gold/ptb/test/test.Arabic.gold.ptb", true, true).unwrap();
+        let test_fr = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/FRENCH_SPMRL/gold/ptb/test/test.French.gold.ptb", false, true).unwrap();
+        
+        File::create("/tmp/corps/English.test.tb").unwrap().write_all(render_all(test_en).as_bytes()).unwrap();
+        File::create("/tmp/corps/German.test.tb").unwrap().write_all(render_all(test_de).as_bytes()).unwrap();
+        File::create("/tmp/corps/Korean.test.tb").unwrap().write_all(render_all(test_ko).as_bytes()).unwrap();
+        File::create("/tmp/corps/Arabic.test.tb").unwrap().write_all(render_all(test_ar).as_bytes()).unwrap();
+        File::create("/tmp/corps/French.test.tb").unwrap().write_all(render_all(test_fr).as_bytes()).unwrap();
     }
     
     #[test]

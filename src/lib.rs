@@ -657,8 +657,8 @@ mod tests {
     #[test]
     #[ignore]
     fn write_out_clean_tbs() {
-        fn render_all(v: Vec<PTBTree>) -> String {
-            v.into_iter().map(|mut t| {t.strip_all_predicate_annotations();t.render()}).collect::<Vec<String>>().join("\n") + "\n"
+        fn render_all(v: &Vec<PTBTree>, strip: bool) -> String {
+            v.clone().into_iter().map(|mut t| {if strip {t.strip_all_predicate_annotations()};t.front()}).collect::<Vec<String>>().join("\n") + "\n"
         }
         
         let train_en = parse_ptb_sections("/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj", (2..22).collect());
@@ -667,23 +667,11 @@ mod tests {
         let train_ar = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/ARABIC_SPMRL/gold/ptb/train/train.Arabic.gold.ptb", true, true).unwrap();
         let train_fr = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/FRENCH_SPMRL/gold/ptb/train/train.French.gold.ptb", false, true).unwrap();
         
-        File::create("/tmp/corps/English.train.tb").unwrap().write_all(render_all(train_en).as_bytes()).unwrap();
-        File::create("/tmp/corps/German.train.tb").unwrap().write_all(render_all(train_de).as_bytes()).unwrap();
-        File::create("/tmp/corps/Korean.train.tb").unwrap().write_all(render_all(train_ko).as_bytes()).unwrap();
-        File::create("/tmp/corps/Arabic.train.tb").unwrap().write_all(render_all(train_ar).as_bytes()).unwrap();
-        File::create("/tmp/corps/French.train.tb").unwrap().write_all(render_all(train_fr).as_bytes()).unwrap();
-        
         let dev_en = parse_ptb_sections("/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj", vec![22]);
         let dev_de = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb/dev/dev.German.gold.ptb", true, true).unwrap();
         let dev_ko = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/KOREAN_SPMRL/gold/ptb/dev/dev.Korean.gold.ptb", true, true).unwrap();
         let dev_ar = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/ARABIC_SPMRL/gold/ptb/dev/dev.Arabic.gold.ptb", true, true).unwrap();
         let dev_fr = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/FRENCH_SPMRL/gold/ptb/dev/dev.French.gold.ptb", false, true).unwrap();
-        
-        File::create("/tmp/corps/English.dev.tb").unwrap().write_all(render_all(dev_en).as_bytes()).unwrap();
-        File::create("/tmp/corps/German.dev.tb").unwrap().write_all(render_all(dev_de).as_bytes()).unwrap();
-        File::create("/tmp/corps/Korean.dev.tb").unwrap().write_all(render_all(dev_ko).as_bytes()).unwrap();
-        File::create("/tmp/corps/Arabic.dev.tb").unwrap().write_all(render_all(dev_ar).as_bytes()).unwrap();
-        File::create("/tmp/corps/French.dev.tb").unwrap().write_all(render_all(dev_fr).as_bytes()).unwrap();
         
         let test_en = parse_ptb_sections("/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj", vec![23]);
         let test_de = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb/test/test.German.gold.ptb", true, true).unwrap();
@@ -691,11 +679,45 @@ mod tests {
         let test_ar = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/ARABIC_SPMRL/gold/ptb/test/test.Arabic.gold.ptb", true, true).unwrap();
         let test_fr = parse_spmrl_ptb_file("/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/FRENCH_SPMRL/gold/ptb/test/test.French.gold.ptb", false, true).unwrap();
         
-        File::create("/tmp/corps/English.test.tb").unwrap().write_all(render_all(test_en).as_bytes()).unwrap();
-        File::create("/tmp/corps/German.test.tb").unwrap().write_all(render_all(test_de).as_bytes()).unwrap();
-        File::create("/tmp/corps/Korean.test.tb").unwrap().write_all(render_all(test_ko).as_bytes()).unwrap();
-        File::create("/tmp/corps/Arabic.test.tb").unwrap().write_all(render_all(test_ar).as_bytes()).unwrap();
-        File::create("/tmp/corps/French.test.tb").unwrap().write_all(render_all(test_fr).as_bytes()).unwrap();
+        File::create("/tmp/corps/English.train.yield").unwrap().write_all(render_all(&train_en, true).as_bytes()).unwrap();
+        File::create("/tmp/corps/German.train.yield").unwrap().write_all(render_all(&train_de, false).as_bytes()).unwrap();
+        File::create("/tmp/corps/Korean.train.yield").unwrap().write_all(render_all(&train_ko, false).as_bytes()).unwrap();
+        File::create("/tmp/corps/Arabic.train.yield").unwrap().write_all(render_all(&train_ar, false).as_bytes()).unwrap();
+        File::create("/tmp/corps/French.train.yield").unwrap().write_all(render_all(&train_fr, false).as_bytes()).unwrap();
+        
+        File::create("/tmp/corps/English.dev.yield").unwrap().write_all(render_all(&dev_en, true).as_bytes()).unwrap();
+        File::create("/tmp/corps/German.dev.yield").unwrap().write_all(render_all(&dev_de, false).as_bytes()).unwrap();
+        File::create("/tmp/corps/Korean.dev.yield").unwrap().write_all(render_all(&dev_ko, false).as_bytes()).unwrap();
+        File::create("/tmp/corps/Arabic.dev.yield").unwrap().write_all(render_all(&dev_ar, false).as_bytes()).unwrap();
+        File::create("/tmp/corps/French.dev.yield").unwrap().write_all(render_all(&dev_fr, false).as_bytes()).unwrap();
+        
+        File::create("/tmp/corps/English.test.yield").unwrap().write_all(render_all(&test_en, true).as_bytes()).unwrap();
+        File::create("/tmp/corps/German.test.yield").unwrap().write_all(render_all(&test_de, false).as_bytes()).unwrap();
+        File::create("/tmp/corps/Korean.test.yield").unwrap().write_all(render_all(&test_ko, false).as_bytes()).unwrap();
+        File::create("/tmp/corps/Arabic.test.yield").unwrap().write_all(render_all(&test_ar, false).as_bytes()).unwrap();
+        File::create("/tmp/corps/French.test.yield").unwrap().write_all(render_all(&test_fr, false).as_bytes()).unwrap();
+        
+        fn render_all_pos(v: &Vec<PTBTree>, strip: bool) -> String {
+            v.clone().into_iter().map(|mut t| {if strip {t.strip_all_predicate_annotations()};t.pos_front()}).collect::<Vec<String>>().join("\n") + "\n"
+        }
+        
+        File::create("/tmp/corps/English.train.posyield").unwrap().write_all(render_all_pos(&train_en, true).as_bytes()).unwrap();
+        File::create("/tmp/corps/German.train.posyield").unwrap().write_all(render_all_pos(&train_de, false).as_bytes()).unwrap();
+        File::create("/tmp/corps/Korean.train.posyield").unwrap().write_all(render_all_pos(&train_ko, false).as_bytes()).unwrap();
+        File::create("/tmp/corps/Arabic.train.posyield").unwrap().write_all(render_all_pos(&train_ar, false).as_bytes()).unwrap();
+        File::create("/tmp/corps/French.train.posyield").unwrap().write_all(render_all_pos(&train_fr, false).as_bytes()).unwrap();
+        
+        File::create("/tmp/corps/English.dev.posyield").unwrap().write_all(render_all_pos(&dev_en, true).as_bytes()).unwrap();
+        File::create("/tmp/corps/German.dev.posyield").unwrap().write_all(render_all_pos(&dev_de, false).as_bytes()).unwrap();
+        File::create("/tmp/corps/Korean.dev.posyield").unwrap().write_all(render_all_pos(&dev_ko, false).as_bytes()).unwrap();
+        File::create("/tmp/corps/Arabic.dev.posyield").unwrap().write_all(render_all_pos(&dev_ar, false).as_bytes()).unwrap();
+        File::create("/tmp/corps/French.dev.posyield").unwrap().write_all(render_all_pos(&dev_fr, false).as_bytes()).unwrap();
+        
+        File::create("/tmp/corps/English.test.posyield").unwrap().write_all(render_all_pos(&test_en, true).as_bytes()).unwrap();
+        File::create("/tmp/corps/German.test.posyield").unwrap().write_all(render_all_pos(&test_de, false).as_bytes()).unwrap();
+        File::create("/tmp/corps/Korean.test.posyield").unwrap().write_all(render_all_pos(&test_ko, false).as_bytes()).unwrap();
+        File::create("/tmp/corps/Arabic.test.posyield").unwrap().write_all(render_all_pos(&test_ar, false).as_bytes()).unwrap();
+        File::create("/tmp/corps/French.test.posyield").unwrap().write_all(render_all_pos(&test_fr, false).as_bytes()).unwrap();
     }
     
     #[test]
